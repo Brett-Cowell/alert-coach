@@ -64,7 +64,8 @@ function renderBanner() {
 function show(v) {
   document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
   document.querySelectorAll('#app section').forEach(s => s.classList.toggle('on', s.id === v));
-  if (v === 'ins') renderIns(); if (v === 'team') loadTeam();
+  if (v === 'ins' || v === 'pilot') loadUse().catch(() => {}); if (v === 'team') loadTeam();
+  if (v === 'lib') loadTeamLib().catch(() => {});
 }
 function setInd(k) {
   if (!IND[k]) k = 'auto'; C = IND[k]; C.k = k; LIB = C.lib; try { localStorage.setItem('ind', k); } catch (e) { /* ignore */ }
@@ -232,15 +233,16 @@ function renderTeam() {
   else html += `<label for="bseats">Seats (one per person)</label><input id="bseats" type="number" min="1" max="500" value="${Math.max(1, T ? T.used : 1)}" style="max-width:120px"><button class="p" data-act="checkout">Subscribe</button>` + (p.hasCustomer ? ' <button class="ghost" data-act="portal">Billing history</button>' : '');
   html += '</div>';
   if (T) {
-    html += `<div class="card"><b>People</b> <span class="note">(${T.used} of ${T.seats} seats used)</span>` + T.members.map(m => `<div class="row" style="align-items:center;margin:10px 0"><div style="flex:1;min-width:150px">${esc(m.name)}<br><span class="note">${esc(m.email)}</span></div><select data-role="${esc(m.id)}" style="width:auto" ${m.id === S.me.user.id ? 'disabled' : ''}><option value="consultant"${m.role === 'consultant' ? ' selected' : ''}>Sales consultant</option><option value="manager"${m.role === 'manager' ? ' selected' : ''}>Manager</option></select>${m.id !== S.me.user.id ? `<button class="ghost" data-act="resetPw" data-id="${esc(m.id)}">Password link</button><button class="ghost" data-act="rmUser" data-id="${esc(m.id)}" data-name="${esc(m.name)}">Remove</button>` : ''}</div>`).join('') +
+    html += `<div class="card"><b>People</b> <span class="note">(${T.used} of ${T.seats} seats used)</span>` + T.members.map(m => `<div class="row" style="align-items:center;margin:10px 0"><div style="flex:1;min-width:150px">${esc(m.name)}<br><span class="note">${esc(m.email)}</span></div><select data-role="${esc(m.id)}" style="width:auto" ${m.id === S.me.user.id ? 'disabled' : ''}><option value="consultant"${m.role === 'consultant' ? ' selected' : ''}>Sales consultant</option><option value="manager"${m.role === 'manager' ? ' selected' : ''}>Manager</option></select>${m.id !== S.me.user.id ? `<button class="ghost" data-act="resetPw" data-id="${esc(m.id)}" data-email="${esc(m.email)}">Password link</button><button class="ghost" data-act="rmUser" data-id="${esc(m.id)}" data-name="${esc(m.name)}">Remove</button>` : ''}</div>`).join('') +
       T.invites.map(i => `<div class="row" style="align-items:center;margin:10px 0"><div style="flex:1">${esc(i.email)}<br><span class="note">Invited as ${i.role === 'manager' ? 'manager' : 'sales consultant'} · pending</span></div><button class="ghost" data-act="rmInvite" data-email="${esc(i.email)}">Cancel</button></div>`).join('') + '</div>' +
       `<div class="card"><b>Invite someone</b><div class="g"><div><label for="iemail">Email</label><input id="iemail" type="email"></div><div><label for="irole">Role</label><select id="irole"><option value="consultant">Sales consultant</option><option value="manager">Manager</option></select></div></div><button class="p" data-act="invite">Create invite link</button>` +
-      (S.link ? `<p class="note" style="margin-top:12px">Send this link to the person (it works once and expires in a few days):</p><div class="mono">${esc(S.link)}</div><div class="row"><button class="ghost" data-act="copyLink">Copy link</button></div>` : '') + '</div>';
+      (S.link ? `<p class="note" style="margin-top:12px">${S.sent ? 'We emailed this link to ' + esc(S.sent) + '. You can also send it yourself:' : 'Send this link to the person (it works once and expires in a few days):'}</p><div class="mono">${esc(S.link)}</div><div class="row"><button class="ghost" data-act="copyLink">Copy link</button></div>` : '') + '</div>';
   }
   $('#teamOut').innerHTML = html;
 }
-const invite = guard(async () => { const j = await api('POST', '/api/invites', { email: $('#iemail').value, role: $('#irole').value }); S.link = j.link.startsWith('http') ? j.link : location.origin + j.link; await loadTeam(); });
-const resetPw = guard(async d => { const j = await api('POST', `/api/users/${d.id}/reset`, {}); S.link = j.link.startsWith('http') ? j.link : location.origin + j.link; await loadTeam(); });
+const absLink = l => l.startsWith('http') ? l : location.origin + l;
+const invite = guard(async () => { const em = $('#iemail').value.trim(); const j = await api('POST', '/api/invites', { email: em, role: $('#irole').value }); S.link = absLink(j.link); S.sent = j.emailed ? em : ''; await loadTeam(); toast(j.emailed ? 'Invite emailed to ' + em : 'Invite created. Copy the link below and send it.'); });
+const resetPw = guard(async d => { const j = await api('POST', `/api/users/${d.id}/reset`, {}); S.link = absLink(j.link); S.sent = j.emailed ? d.email : ''; await loadTeam(); toast(j.emailed ? 'Password link emailed to ' + d.email : 'Link created. Copy it below and send it.'); });
 const rmUser = guard(async d => { if (!confirm(`Remove ${d.name}? Their history is deleted and they lose access.`)) return; await api('DELETE', '/api/users/' + d.id); await loadTeam(); });
 const rmInvite = guard(async d => { await api('DELETE', '/api/invites', { email: d.email }); await loadTeam(); });
 const checkout = guard(async () => { const j = await api('POST', '/api/billing/checkout', { seats: +$('#bseats').value }); location.href = j.url; });
