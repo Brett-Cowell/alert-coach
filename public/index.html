@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ALERT Objection Coach</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+.auth{max-width:420px;margin:8vh auto 0;padding:0 16px}
+.auth form{display:none}.auth form.on{display:block}
+.err{color:#b3261e;font-size:13px;min-height:18px;margin-top:8px}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px;color:var(--mut);margin-bottom:8px}
+.banner{background:var(--accb);color:var(--acc);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:14px}
+.banner.warn{background:#fbebeb;color:#8c1d18}
+.link{background:none;border:0;color:var(--acc);cursor:pointer;font:inherit;padding:0;text-decoration:underline}
+.mono{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all;background:var(--bg);padding:8px;border-radius:6px;margin-top:6px}
+#hidden{display:none}
+</style>
+</head>
+<body>
+<div id="auth" class="auth" hidden>
+  <h1>ALERT Objection Coach</h1>
+  <p class="sub" id="authSub">Sign in to your dealership account.</p>
+  <div class="card">
+    <form id="f-login" data-form="login" class="on">
+      <label for="l-email">Email</label><input id="l-email" type="email" autocomplete="username" required>
+      <label for="l-pw">Password</label><input id="l-pw" type="password" autocomplete="current-password" required>
+      <button class="p" type="submit">Sign in</button>
+      <p class="note" style="margin-top:12px">New dealership? <button type="button" class="link" data-act="authView" data-v="signup">Start a free trial</button></p>
+    </form>
+    <form id="f-signup" data-form="signup">
+      <label for="s-deal">Dealership name</label><input id="s-deal" required maxlength="100">
+      <label for="s-name">Your name</label><input id="s-name" autocomplete="name" required maxlength="100">
+      <label for="s-email">Work email</label><input id="s-email" type="email" autocomplete="username" required>
+      <label for="s-pw">Password (10+ characters)</label><input id="s-pw" type="password" autocomplete="new-password" minlength="10" required>
+      <button class="p" type="submit">Create account</button>
+      <p class="note" style="margin-top:12px">You become the manager and can invite your sales consultants. <button type="button" class="link" data-act="authView" data-v="login">Back to sign in</button></p>
+    </form>
+    <form id="f-invite" data-form="invite">
+      <p class="note" id="inviteNote" style="margin-top:0"></p>
+      <label for="i-name">Your name</label><input id="i-name" autocomplete="name" required maxlength="100">
+      <label for="i-pw">Choose a password (10+ characters)</label><input id="i-pw" type="password" autocomplete="new-password" minlength="10" required>
+      <button class="p" type="submit">Join</button>
+    </form>
+    <form id="f-reset" data-form="reset">
+      <p class="note" style="margin-top:0">Choose a new password.</p>
+      <label for="r-pw">New password (10+ characters)</label><input id="r-pw" type="password" autocomplete="new-password" minlength="10" required>
+      <button class="p" type="submit">Save password</button>
+    </form>
+    <div class="err" id="authErr" role="alert"></div>
+  </div>
+</div>
+
+<div class="w" id="app" hidden>
+  <div class="bar"><span id="who"></span><button class="link" data-act="signout">Sign out</button></div>
+  <div id="banner"></div>
+  <div id="brand" class="brand"></div>
+  <h1>ALERT Objection Coach <select id="ind" aria-label="Industry"></select></h1>
+  <p class="sub" id="sub"></p>
+  <nav id="nav">
+    <button data-act="tab" data-v="coach" class="on">Coach</button>
+    <button data-act="tab" data-v="lib">Library</button>
+    <button data-act="tab" data-v="prac">Practice</button>
+    <button data-act="tab" data-v="hist">History</button>
+    <button data-act="tab" data-v="setup">Dealership</button>
+    <button data-act="tab" data-v="ins" data-mgr>Team insights</button>
+    <button data-act="tab" data-v="pilot" data-mgr>Pilot</button>
+    <button data-act="tab" data-v="team" data-mgr>Team &amp; billing</button>
+  </nav>
+
+  <section id="coach" class="on">
+    <div class="card">
+      <label for="obj">The objection you’re hearing</label>
+      <textarea id="obj" maxlength="600"></textarea>
+      <div class="g">
+        <div><label for="prod">Vehicle or offer</label><input id="prod" maxlength="120"></div>
+        <div><label for="role">Buyer type</label><select id="role"></select></div>
+        <div><label for="stage">Deal stage</label><select id="stage"></select></div>
+        <div><label for="tone">Tone</label><select id="tone"><option>Consultative</option><option>Direct</option><option>Warm</option><option>Challenger</option></select></div>
+      </div>
+      <label for="said">What’s been said so far (optional)</label><textarea id="said" maxlength="600"></textarea>
+      <label for="mode">Response source</label>
+      <select id="mode"><option value="hybrid">Hybrid — library first, AI for anything else</option><option value="ai">AI — tailored to this exact situation</option><option value="lib">Library — proven responses only</option></select>
+      <button class="p" id="go" data-act="gen">Get ALERT response</button>
+      <p class="note">Responses are AI-assisted suggestions. Check prices, terms and offers before quoting, and don’t enter customer names or personal details. Managers can see usage.</p>
+    </div>
+    <div id="out"></div>
+  </section>
+
+  <section id="lib">
+    <div class="g"><input id="q" placeholder="Search objections…"><select id="cat"></select></div>
+    <div id="libList" style="margin-top:12px"></div>
+  </section>
+
+  <section id="prac">
+    <div class="card"><p class="note" style="margin-top:0">The app plays the client. Respond using ALERT, then ask for coaching.</p>
+      <label for="pobj">Objection to practise</label><input id="pobj" placeholder="Pick from the library or type your own" maxlength="300">
+      <label for="pers">Client style</label><select id="pers"></select>
+      <button class="p" data-act="startP">Start role-play</button></div>
+    <div id="chat"></div>
+    <div id="pin" style="display:none"><textarea id="pmsg" placeholder="Your reply to the client…" maxlength="1000"></textarea>
+      <div class="row"><button class="p" id="psend" data-act="sendP" style="margin:0">Send</button><button class="ghost" data-act="fbP">Coach me on this</button></div></div>
+    <div id="fb" class="card" style="display:none;white-space:pre-wrap;margin-top:12px"></div>
+  </section>
+
+  <section id="hist"><div id="histList"></div><p class="note">Your history is private to you.</p></section>
+
+  <section id="setup"><div class="card"><p class="note" id="snote" style="margin-top:0"></p><div id="sform"></div>
+    <button class="p" id="ssave" data-act="saveCfg">Save dealership details</button></div></section>
+
+  <section id="ins">
+    <div class="row" style="margin:0 0 12px"><select id="iper" style="width:auto"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="0">All time</option></select></div>
+    <div id="insOut"></div><p class="note">Based on usage logged by your team’s sales consultants. Visible to managers only.</p>
+  </section>
+
+  <section id="pilot"><div id="pilotOut"></div></section>
+  <section id="team"><div id="teamOut"></div></section>
+</div>
+<div id="toast"></div>
+<script src="/data.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

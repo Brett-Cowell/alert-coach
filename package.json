@@ -1,0 +1,13 @@
+{
+  "name": "alert-objection-coach",
+  "version": "1.0.0",
+  "description": "ALERT Objection Coach: objection-handling coach for dealership sales consultants",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": { "node": ">=22.13.0" },
+  "scripts": {
+    "start": "node --no-warnings server.js",
+    "test": "node --no-warnings test/e2e.js",
+    "admin": "node --no-warnings scripts/admin.js"
+  }
+}
