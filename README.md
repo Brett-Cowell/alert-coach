@@ -41,7 +41,17 @@ Create a key at console.anthropic.com and set `ANTHROPIC_API_KEY`. Each trial or
 4. Enable the Customer Portal in Stripe settings so managers can change card or cancel.
 5. Test the whole flow in Stripe **test mode** first (card 4242 4242 4242 4242).
 
-## 5. Day-to-day owner tools
+## 5. Turn on email (optional but recommended)
+
+Without this, managers copy invite and password links and send them by hand. With it, the app emails them automatically (the link is still shown as a backup).
+
+1. Create an account at resend.com and add your domain under **Domains**. Add the DNS records Resend shows you at wherever you bought the domain, then wait for it to say Verified.
+2. Create an API key and set `RESEND_API_KEY`.
+3. Set `MAIL_FROM` to an address on that domain, like `ALERT Coach <hello@yourdomain.com>`.
+
+Resend only lets you email other people from a verified domain. Until then it will only deliver to your own address.
+
+## 6. Day-to-day owner tools
 
 ```
 npm run admin -- list                    # dealerships, seats, trial or subscription
@@ -61,7 +71,7 @@ npm run admin -- seats <tenantId> 10     # change seat limit by hand
 
 ## Known limits
 
-- Password resets and invites are shown as links for the manager to send; the app does not send email yet.
+- Invite and password emails need the optional email setup in section 5; without it the manager copies the links by hand.
 - The login rate limit is in memory, so it resets when the server restarts.
 - Only the automotive library is fully built out; other industries use a short generic library.
 - The browser front end has had a syntax check and a cross-check of its element ids against the page, but has not been clicked through in a real browser. Do that on the live site before showing a customer.

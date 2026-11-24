@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const { q, tx } = require('./db');
 const ai = require('./ai');
 const billing = require('./billing');
+const mailer = require('./mailer');
 
 const PORT = Number(process.env.PORT || 3000);
 const PROD = process.env.NODE_ENV === 'production';
@@ -233,7 +234,8 @@ route('POST', '/api/invites', async (req, res) => {
   q.run(`DELETE FROM tokens WHERE tenant_id=? AND kind='invite' AND email=?`, t.id, email);
   const token = crypto.randomBytes(24).toString('base64url');
   q.run(`INSERT INTO tokens(token_hash,kind,tenant_id,email,role,expires) VALUES(?,?,?,?,?,?)`, sha(token), 'invite', t.id, email, role, now() + 7 * DAY);
-  out(res, 201, { link: `${process.env.APP_URL || ''}/?invite=${token}`, expiresInDays: 7 });
+  const link = `${process.env.APP_URL || ''}/?invite=${token}`;
+  out(res, 201, { link, expiresInDays: 7, emailed: await mailer.invite(email, t.name, u.name, link, 7) });
 });
 
 route('DELETE', '/api/invites', async (req, res) => {
@@ -245,11 +247,12 @@ route('DELETE', '/api/invites', async (req, res) => {
 
 route('POST', '/api/users/:id/reset', async (req, res, p) => {
   const u = auth(req); manager(u);
-  const t = q.one('SELECT id FROM users WHERE id=? AND tenant_id=?', p.id, u.tenant_id);
+  const t = q.one('SELECT id,email,name FROM users WHERE id=? AND tenant_id=?', p.id, u.tenant_id);
   if (!t) throw fail(404, 'Person not found.');
   const token = crypto.randomBytes(24).toString('base64url');
   q.run(`INSERT INTO tokens(token_hash,kind,tenant_id,user_id,expires) VALUES(?,?,?,?,?)`, sha(token), 'reset', u.tenant_id, p.id, now() + DAY);
-  out(res, 201, { link: `${process.env.APP_URL || ''}/?reset=${token}` });
+  const link = `${process.env.APP_URL || ''}/?reset=${token}`;
+  out(res, 201, { link, emailed: await mailer.reset(t.email, t.name, link) });
 });
 
 route('PATCH', '/api/users/:id', async (req, res, p) => {

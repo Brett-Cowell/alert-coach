@@ -80,7 +80,7 @@
       </div>
       <label for="said">What’s been said so far (optional)</label><textarea id="said" maxlength="600"></textarea>
       <label for="mode">Response source</label>
-      <select id="mode"><option value="hybrid">Hybrid — library first, AI for anything else</option><option value="ai">AI — tailored to this exact situation</option><option value="lib">Library — proven responses only</option></select>
+      <select id="mode"><option value="ai" selected>AI — tailored to this exact situation</option><option value="hybrid">Hybrid — library first, AI for anything else</option><option value="lib">Library — proven responses only</option></select>
       <button class="p" id="go" data-act="gen">Get ALERT response</button>
       <p class="note">Responses are AI-assisted suggestions. Check prices, terms and offers before quoting, and don’t enter customer names or personal details. Managers can see usage.</p>
     </div>
@@ -116,6 +116,7 @@
   <section id="pilot"><div id="pilotOut"></div></section>
   <section id="team"><div id="teamOut"></div></section>
 </div>
+<p class="foot">Developed by Cowell Consulting Pty Ltd</p>
 <div id="toast"></div>
 <script src="/data.js"></script>
 <script src="/app.js"></script>

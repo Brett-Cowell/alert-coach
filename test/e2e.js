@@ -26,14 +26,19 @@ const fakeStripe = http.createServer((req, res) => {
     res.statusCode = 404; res.end('{}');
   });
 });
+const mails = [];
+const fakeMail = http.createServer((req, res) => {
+  let b = ''; req.on('data', c => b += c); req.on('end', () => { mails.push({ auth: req.headers.authorization, ...JSON.parse(b) }); res.setHeader('content-type', 'application/json'); res.end('{"id":"m1"}'); });
+});
 const listen = s => new Promise(r => s.listen(0, '127.0.0.1', () => r(s.address().port)));
 
 (async () => {
-  const [aiPort, stPort] = [await listen(fakeAI), await listen(fakeStripe)];
+  const [aiPort, stPort, mailPort] = [await listen(fakeAI), await listen(fakeStripe), await listen(fakeMail)];
   Object.assign(process.env, {
     DATABASE_FILE: ':memory:', ANTHROPIC_API_KEY: 'test-key', ANTHROPIC_BASE_URL: `http://127.0.0.1:${aiPort}`,
     STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_PRICE_ID: 'price_123', STRIPE_WEBHOOK_SECRET: 'whsec_test',
     STRIPE_API_BASE: `http://127.0.0.1:${stPort}`, APP_URL: 'https://coach.example.com', TRIAL_SEATS: '3',
+    RESEND_API_KEY: 're_test', MAIL_FROM: 'Coach <hi@coach.example.com>', RESEND_API_BASE: `http://127.0.0.1:${mailPort}`,
   });
   const { server } = require('../server');
   const { q } = require('../db');
@@ -94,7 +99,9 @@ const listen = s => new Promise(r => s.listen(0, '127.0.0.1', () => r(s.address(
   });
   await ok('invite, seat limit, accept', async () => {
     const r = await M('POST', '/api/invites', { email: 'sam@metro.test', role: 'consultant' });
-    assert.equal(r.s, 201); inviteLink = r.j.link; assert.match(inviteLink, /^https:\/\/coach\.example\.com\/\?invite=/);
+    assert.equal(r.s, 201); assert.equal(r.j.emailed, true);
+    assert.deepEqual(mails[0].to, ['sam@metro.test']); assert.equal(mails[0].auth, 'Bearer re_test'); assert.ok(mails[0].html.includes(r.j.link) && mails[0].text.includes(r.j.link));
+    inviteLink = r.j.link; assert.match(inviteLink, /^https:\/\/coach\.example\.com\/\?invite=/);
     const token = inviteLink.split('invite=')[1];
     assert.equal((await A('GET', '/api/invite/' + token)).j.email, 'sam@metro.test');
     assert.equal((await M('POST', '/api/invites', { email: 'lee@metro.test' })).s, 201);
@@ -136,7 +143,7 @@ const listen = s => new Promise(r => s.listen(0, '127.0.0.1', () => r(s.address(
     assert.equal(t.members.length, 2); assert.equal(t.invites.length, 1);
     const sam = t.members.find(m => m.email === 'sam@metro.test');
     const reset = await M('POST', `/api/users/${sam.id}/reset`);
-    assert.equal(reset.s, 201);
+    assert.equal(reset.s, 201); assert.equal(reset.j.emailed, true); assert.deepEqual(mails[mails.length - 1].to, ['sam@metro.test']);
     assert.equal((await A('POST', '/api/reset', { token: reset.j.link.split('reset=')[1], password: 'brand-new-password' })).s, 200);
     assert.equal((await C('GET', '/api/me')).s, 401); // old sessions ended
     assert.equal((await C('POST', '/api/login', { email: 'sam@metro.test', password: 'brand-new-password' })).s, 200);
@@ -182,5 +189,5 @@ const listen = s => new Promise(r => s.listen(0, '127.0.0.1', () => r(s.address(
   });
 
   console.log(`\n${passed} checks passed${process.exitCode ? ', with failures' : ''}`);
-  server.close(); fakeAI.close(); fakeStripe.close();
+  server.close(); fakeAI.close(); fakeStripe.close(); fakeMail.close();
 })();
