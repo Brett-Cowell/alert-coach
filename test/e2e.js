@@ -13,6 +13,9 @@ const fakeAI = http.createServer((req, res) => {
     if (prompt.includes('Return ONLY JSON')) text = JSON.stringify({ acknowledge: '“I hear you.”', listen: 'Stay quiet and let them finish.', explore: ['What number works?', 'What is included?', 'What matters most?'], respond: 'Here is how we compare.', test: 'Does that help?' });
     if (prompt.startsWith('You are a sales coach')) text = 'ACKNOWLEDGE: 3/5. Fine.\nSCORES: A=3,L=4,E=2,R=3,T=1';
     res.setHeader('content-type', 'application/json');
+    if (prompt.includes('MESSY')) text = 'Sure! Here is the answer:\n```json\n{"acknowledge":"I hear you.","listen":"Stay quiet.","explore":["a?","b?","c?",],"respond":"Line one\nLine two {braces}","test":"Does that help?",}\n```\nHope {that} helps';
+    if (prompt.includes('BADONCE') && !mock.badonce) { mock.badonce = 1; text = 'I could not do that.'; }
+    if (prompt.includes('ALWAYSBAD')) text = '{"acknowledge":"cut off';
     if (body.tools && prompt.includes('FAILTOOL')) { res.statusCode = 400; return res.end('{"error":"web search not enabled"}'); }
     if (body.tools) {
       const j = { competitors: 0 };
@@ -117,6 +120,16 @@ const listen = s => new Promise(r => s.listen(0, '127.0.0.1', () => r(s.address(
     // no competitors: no search, no market block
     r = await M('POST', '/api/ai', { task: 'coach', obj: 'Price is high', ind: 'auto', ctx: {} });
     assert.equal(mock.bodies.at(-1).tools, undefined); assert.equal(r.j.result.m, undefined);
+  });
+  await ok('messy or unreadable AI answers are handled', async () => {
+    const go = obj => M('POST', '/api/ai', { task: 'coach', obj, ind: 'auto', ctx: {} });
+    let r = await go('MESSY objection');
+    assert.equal(r.s, 200); assert.equal(r.j.result.r, "Line one Line two {braces}"); assert.equal(r.j.result.e.length, 3);
+    const before = mock.prompts.length;
+    r = await go('BADONCE objection');
+    assert.equal(r.s, 200); assert.equal(mock.prompts.length - before, 2); // retried once and recovered
+    r = await go('ALWAYSBAD objection');
+    assert.equal(r.s, 502); assert.match(r.j.error, /Could not read/);
   });
   await ok('practice and feedback', async () => {
     const chat = [{ w: 'c', t: 'Payment too high' }, { w: 'r', t: 'What number works?' }];

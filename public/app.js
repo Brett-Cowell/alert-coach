@@ -80,7 +80,7 @@ function setInd(k) {
   $('#cat').innerHTML = cs.length ? '<option value="">All categories</option>' + cs.map(c => `<option>${esc(c)}</option>`).join('') : '';
   $('#cat').style.display = cs.length ? '' : 'none';
   document.querySelector('#nav [data-v="setup"]').style.display = k === 'auto' ? '' : 'none';
-  renderLib(); renderSetup();
+  renderLib(); renderSetup(); fillPlib();
 }
 
 /* ---------- dealership details ---------- */
@@ -152,7 +152,7 @@ function renderHist() {
 }
 function openH(d) { const h = S.hist[+d.i]; $('#obj').value = h.obj; S.res = h.r; S.obj = h.obj; S.lt = null; S.rated = true; show('coach'); renderRes(); }
 const delH = guard(async d => { await api('DELETE', '/api/history/' + S.hist[+d.i].id); await loadHist(); });
-async function loadTeamLib() { S.team = await api('GET', '/api/library'); renderLib(); }
+async function loadTeamLib() { S.team = await api('GET', '/api/library'); renderLib(); fillPlib(); }
 function renderLib() {
   const q = $('#q').value.toLowerCase(), cat = $('#cat').value;
   const all = LIB.map((e, i) => ({ k: 'b', i, o: e.o, t: e.n, c: e.c || '' })).concat(S.team.map((e, i) => ({ k: 't', i, o: e.obj, t: 'Shared by team', ind: e.ind || 'auto' })).filter(x => x.ind === C.k));
@@ -165,6 +165,15 @@ function useL(d) { const o = d.k === 'b' ? LIB[+d.i] : null; $('#obj').value = o
 const delT = guard(async d => { await api('DELETE', '/api/library/' + S.team[+d.i].id); await loadTeamLib(); });
 
 /* ---------- practice ---------- */
+function fillPlib() {
+  const sel = $('#plib'); if (!sel) return;
+  const groups = {};
+  LIB.forEach(e => { (groups[e.c || 'Library'] = groups[e.c || 'Library'] || []).push(e.o); });
+  const team = S.team.filter(x => (x.ind || 'auto') === C.k).map(x => x.obj);
+  sel.innerHTML = '<option value="">Choose from the library…</option>' +
+    Object.entries(groups).map(([g, os]) => `<optgroup label="${esc(g)}">` + os.map(o => `<option>${esc(o)}</option>`).join('') + '</optgroup>').join('') +
+    (team.length ? '<optgroup label="Shared by your team">' + team.map(o => `<option>${esc(o)}</option>`).join('') + '</optgroup>' : '');
+}
 const renderChat = () => $('#chat').innerHTML = S.chat.map(m => `<div class="msg ${m.w}">${esc(m.t)}</div>`).join('');
 function startP(o) {
   if (typeof o === 'string') $('#pobj').value = o;
@@ -226,6 +235,7 @@ document.addEventListener('change', e => {
   const r = e.target.closest('[data-role]'); if (r) guard(async () => { await api('PATCH', '/api/users/' + r.dataset.role, { role: r.value }); toast('Updated'); await loadTeam(); })();
   if (e.target.id === 'ind') setInd(e.target.value);
   if (e.target.id === 'cat') renderLib();
+  if (e.target.id === 'plib' && e.target.value) { $('#pobj').value = e.target.value; e.target.value = ''; $('#pobj').focus(); }
   if (e.target.id === 'iper') renderIns();
 });
 document.addEventListener('input', e => { if (e.target.id === 'q') renderLib(); });

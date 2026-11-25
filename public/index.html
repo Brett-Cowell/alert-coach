@@ -97,7 +97,8 @@
 
   <section id="prac">
     <div class="card"><p class="note" style="margin-top:0">The app plays the client. Respond using ALERT, then ask for coaching.</p>
-      <label for="pobj">Objection to practise</label><input id="pobj" placeholder="Pick from the library or type your own" maxlength="300">
+      <label for="plib">Objection to practise</label><select id="plib" aria-label="Choose an objection from the library"><option value="">Choose from the library…</option></select>
+      <input id="pobj" placeholder="…or type your own objection here" maxlength="300" style="margin-top:8px">
       <label for="pers">Client style</label><select id="pers"></select>
       <button class="p" data-act="startP">Start role-play</button></div>
     <div id="chat"></div>
