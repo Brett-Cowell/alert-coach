@@ -52,6 +52,33 @@ function feedbackPrompt(b) {
   return `You are a sales coach. Review this role-play against ALERT (Acknowledge, Listen, Explore, Respond, Test). For each step give a score out of 5 and one specific sentence. Then give the single most useful improvement and a rewritten version of the sales consultant’s weakest line. Be concise, plain text. Finish with one last line exactly like: SCORES: A=3,L=4,E=2,R=3,T=1\n\n${transcript(b.chat)}`;
 }
 
+
+// Pull the first complete JSON object out of a model reply. Tolerates prose around it, code fences,
+// raw line breaks inside strings, and trailing commas.
+function extractJSON(text) {
+  const t = String(text || ''), start = t.indexOf('{');
+  if (start < 0) return null;
+  let depth = 0, inStr = false, esc = false, out = '';
+  for (let i = start; i < t.length; i++) {
+    const ch = t[i];
+    if (inStr) {
+      if (esc) { esc = false; out += ch; continue; }
+      if (ch === '\\') { esc = true; out += ch; continue; }
+      if (ch === '"') { inStr = false; out += ch; continue; }
+      if (ch === '\n') { out += '\\n'; continue; }
+      if (ch === '\r') continue;
+      if (ch === '\t') { out += '\\t'; continue; }
+      out += ch; continue;
+    }
+    if (ch === '"') { inStr = true; out += ch; continue; }
+    if (ch === '{') depth++;
+    if (ch === '}') { depth--; out += ch; if (depth === 0) break; continue; }
+    out += ch;
+  }
+  if (depth !== 0) return null; // cut off before the end
+  try { return JSON.parse(out.replace(/,\s*([}\]])/g, '$1')); } catch (e) { return null; }
+}
+
 async function complete(prompt, maxTokens, opts = {}) {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw Object.assign(new Error('AI is not configured on this server.'), { status: 503 });
@@ -65,7 +92,7 @@ async function complete(prompt, maxTokens, opts = {}) {
       });
     } catch (e) { throw Object.assign(new Error('The AI service did not respond. Please try again.'), { status: 504 }); }
   };
-  let messages = [{ role: 'user', content: prompt }], tools = opts.tools, researched = !!tools, content = [], sources = [];
+  let messages = [{ role: 'user', content: prompt }], tools = opts.tools, researched = !!tools, content = [], sources = [], stop = '';
   for (let turn = 0; turn < 4; turn++) {
     const body = { model: MODEL, max_tokens: maxTokens, messages };
     if (tools) body.tools = tools;
@@ -81,7 +108,7 @@ async function complete(prompt, maxTokens, opts = {}) {
       throw Object.assign(new Error('The AI service returned an error. Please try again.'), { status: 502 });
     }
     const j = await res.json();
-    content = content.concat(j.content || []);
+    content = content.concat(j.content || []); stop = j.stop_reason || '';
     if (j.stop_reason === 'pause_turn' && tools) { messages = [{ role: 'user', content: prompt }, { role: 'assistant', content }]; continue; }
     break;
   }
@@ -90,18 +117,23 @@ async function complete(prompt, maxTokens, opts = {}) {
   for (const p of content) if (p.type === 'web_search_tool_result' && Array.isArray(p.content))
     for (const r of p.content) if (r && /^https:\/\//.test(r.url || '') && !sources.some(x => x.url === r.url)) sources.push({ title: cut(r.title, 120) || r.url, url: String(r.url).slice(0, 400) });
   if (!text) throw Object.assign(new Error('The AI service returned an empty answer.'), { status: 502 });
-  return opts.detail ? { text, sources: sources.slice(0, 6), researched } : text;
+  return opts.detail ? { text, sources: sources.slice(0, 6), researched, stop } : text;
 }
 
 async function coach(b, cfg) {
   const comp = cut((b.ctx || {}).comp, 300), research = !!comp && (b.ctx || {}).research !== false && SEARCH_ON();
   const mkt = IND[b.ind] && b.ind !== 'auto' ? '' : cut(cfg.market, 60);
   const tools = research ? [Object.assign({ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }, COUNTRY[mkt] ? { user_location: { type: 'approximate', country: COUNTRY[mkt] } } : {})] : null;
-  const out = await complete(coachPrompt(b, cfg, research), comp ? 2200 : 1200, { tools, detail: true, fallbackPrompt: research ? coachPrompt(b, cfg, false) : null });
-  const text = out.text;
-  let o;
-  try { o = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)); }
-  catch (e) { throw Object.assign(new Error('Could not read the AI answer. Please try again.'), { status: 502 }); }
+  const max = comp ? 3500 : 1500;
+  let out = await complete(coachPrompt(b, cfg, research), max, { tools, detail: true, fallbackPrompt: research ? coachPrompt(b, cfg, false) : null });
+  let o = extractJSON(out.text);
+  if (!o) { // log what came back, then try once more (without searching if we were searching)
+    console.error('Unreadable AI answer (stop=' + out.stop + '):', out.text.slice(0, 400));
+    out = await complete(coachPrompt(b, cfg, false), max, { detail: true });
+    o = extractJSON(out.text);
+    if (!o) console.error('Unreadable AI answer on retry (stop=' + out.stop + '):', out.text.slice(0, 400));
+  }
+  if (!o) throw Object.assign(new Error('Could not read the AI answer. Please try again.'), { status: 502 });
   const e = Array.isArray(o.explore) ? o.explore.map(x => cut(x, 400)).filter(Boolean).slice(0, 5) : [];
   if (!o.acknowledge || !o.respond || !o.test || !e.length)
     throw Object.assign(new Error('The AI answer was incomplete. Please try again.'), { status: 502 });
