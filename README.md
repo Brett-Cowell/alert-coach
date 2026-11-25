@@ -33,6 +33,10 @@ Put it behind HTTPS (your host usually does this; on a VPS use Caddy or nginx). 
 
 Create a key at console.anthropic.com and set `ANTHROPIC_API_KEY`. Each trial or subscribed dealership user has a daily limit (`AI_DAILY_LIMIT`, default 150) so costs stay predictable. Set a monthly spend limit in the Anthropic console too.
 
+### Competitor research (web search)
+
+When a sales consultant enters competitors on the Coach tab, the AI can search the web for current competitor details and offers in the dealership's market, and shows the sources it used. This uses Anthropic's web search tool, which needs to be **switched on for your organisation in the Anthropic Console** (a Console admin can do this in the organisation's settings), and is billed per search on top of normal AI use. Each lookup does at most 3 searches. If web search isn't enabled, the app still answers and tells the consultant that live research wasn't available. To turn the research off completely, set `WEB_SEARCH=off`.
+
 ## 4. Turn on billing (Stripe)
 
 1. In Stripe, create a Product with a **recurring monthly Price, per unit** (this is per seat). Put its id in `STRIPE_PRICE_ID`.

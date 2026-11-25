@@ -86,12 +86,12 @@ function setInd(k) {
 /* ---------- dealership details ---------- */
 const fill = t => String(t == null ? '' : t).replace(/\{\{(\w+)\}\}/g, (m, k) => ((S.cfg[k] || '').trim() || '[' + (LBL[k] || k) + ']'));
 function renderSetup() {
-  const bn = (S.cfg.dealer || '').trim(); $('#brand').textContent = C.k === 'auto' && bn ? bn : '';
+  const bn = [(S.cfg.dealer || '').trim(), (S.cfg.market || '').trim()].filter(Boolean).join(' · '); $('#brand').textContent = C.k === 'auto' && bn ? bn : '';
   const el = $('#sform');
-  if (!el.dataset.b) { el.dataset.b = 1; el.innerHTML = FD.map(([k, l, t, p]) => `<label>${l}</label>` + (t === 'i' ? `<input data-k="${k}" maxlength="500" placeholder="${esc(p)}">` : `<textarea data-k="${k}" maxlength="500" placeholder="${esc(p)}"></textarea>`)).join(''); }
+  if (!el.dataset.b) { el.dataset.b = 1; el.innerHTML = FD.map(([k, l, t, p]) => `<label>${l}</label>` + (t === 's' ? `<select data-k="${k}"><option value="">Choose…</option>${p.map(o => `<option>${esc(o)}</option>`).join('')}</select>` : t === 'i' ? `<input data-k="${k}" maxlength="500" placeholder="${esc(p)}">` : `<textarea data-k="${k}" maxlength="500" placeholder="${esc(p)}"></textarea>`)).join(''); }
   el.querySelectorAll('[data-k]').forEach(i => { if (document.activeElement !== i) i.value = S.cfg[i.dataset.k] || ''; i.disabled = !isMgr(); });
   $('#ssave').style.display = isMgr() ? '' : 'none';
-  $('#snote').textContent = isMgr() ? 'Fill these in once. They complete the answers for every sales consultant, and the AI uses them too.' : 'Only managers can edit these details. They complete the answers you see.';
+  $('#snote').textContent = isMgr() ? 'Fill these in once. Choose your market first: it sets the currency, spelling and rules the AI writes for. These details complete the answers for every sales consultant.' : 'Only managers can edit these details. They complete the answers you see.';
 }
 const saveCfg = guard(async () => {
   const c = {}; document.querySelectorAll('#sform [data-k]').forEach(i => c[i.dataset.k] = i.value.trim());
@@ -99,15 +99,15 @@ const saveCfg = guard(async () => {
 });
 
 /* ---------- coach ---------- */
-const ctx = () => ({ prod: $('#prod').value.trim(), role: $('#role').value, stage: $('#stage').value, said: $('#said').value.trim(), tone: $('#tone').value });
+const ctx = () => ({ prod: $('#prod').value.trim(), role: $('#role').value, stage: $('#stage').value, said: $('#said').value.trim(), tone: $('#tone').value, comp: $('#comp').value.trim(), research: $('#research').checked });
 function match(t) { t = t.toLowerCase(); let b = null, n = 0; LIB.forEach(e => { const s = e.k.filter(k => t.includes(k)).length; if (s > n) { n = s; b = e; } }); return b; }
 const fromLib = e => ({ a: e.a, l: e.l, e: e.e, r: e.r, t: e.t, src: 'Library' });
 const gen = guard(async force => {
   const obj = $('#obj').value.trim(); if (!obj) { toast('Enter an objection first'); return; }
-  const mode = force === true ? 'ai' : $('#mode').value, m = mode === 'ai' ? null : match(obj);
+  const comp = $('#comp').value.trim(), mode = force === true || comp ? 'ai' : $('#mode').value, m = mode === 'ai' ? null : match(obj);
   if (m) { setRes(fromLib(m), obj, m.n); return; }
   if (mode === 'lib') { toast('No close library match — try Hybrid or AI'); return; }
-  const b = $('#go'); b.disabled = true; b.textContent = 'Thinking…';
+  const b = $('#go'); b.disabled = true; b.textContent = comp && $('#research').checked ? 'Researching the market…' : 'Thinking…';
   try { const j = await api('POST', '/api/ai', { task: 'coach', obj, ind: C.k, ctx: ctx() }); setRes(j.result, obj); }
   finally { b.disabled = false; b.textContent = 'Get ALERT response'; }
 });
@@ -118,6 +118,15 @@ function setRes(r, obj, lt) {
   const e = lt ? LIB.find(x => x.n === lt) : match(obj);
   logUse({ type: 'coach', key: e ? e.n : obj.slice(0, 50).toLowerCase(), cat: (e && e.c) || 'Other', src: r.src, ind: C.k });
 }
+function intelHtml(r) {
+  const m = r.m; if (!m) return '';
+  const cs = m.competitors.map(c => `<div class="ci"><b>${esc(c.name)}</b><ul>${c.points.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`).join('');
+  const of = m.offers.length ? `<b>Offers and incentives found</b><ul>${m.offers.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
+  const src = m.sources && m.sources.length ? `<div class="note">Sources: ${m.sources.filter(x => /^https:\/\//.test(x.url)).map(x => `<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${esc(x.title)}</a>`).join(' · ')}</div>` : '';
+  const status = m.researched ? 'Researched online just now.' : 'Live research was not available, so this is general knowledge only.';
+  return `<div class="card intel"><div class="sh"><b>Market intel: ${esc(m.asked)}</b><button class="ghost" data-act="cp" data-k="intel">Copy</button></div><p class="note">For you, not to read out. ${status} Check every price and offer before quoting it.</p>${cs}${of}${m.caveat ? `<p class="note">${esc(m.caveat)}</p>` : ''}${src}</div>`;
+}
+const intelText = r => { const m = r.m; return m ? 'Market intel: ' + m.asked + '\n' + m.competitors.map(c => c.name + '\n- ' + c.points.join('\n- ')).join('\n') + (m.offers.length ? '\nOffers:\n- ' + m.offers.join('\n- ') : '') + (m.caveat ? '\n' + m.caveat : '') : ''; };
 const ST = [['A', 'Acknowledge', 'a'], ['L', 'Listen', 'l'], ['E', 'Explore', 'e'], ['R', 'Respond', 'r'], ['T', 'Test', 't']];
 const qt = t => '“' + String(t == null ? '' : t).trim().replace(/^["“”]+|["“”]+$/g, '') + '”';
 const disp = (r, k) => k === 'l' ? `<em class="do">${esc(fill(r.l))}</em>` : k === 'e' ? '<ol>' + r.e.map(x => '<li>' + esc(qt(fill(x))) + '</li>').join('') + '</ol>' : esc(qt(fill(r[k])));
@@ -126,12 +135,12 @@ function renderRes() {
   const r = S.res; if (!r) return;
   $('#out').innerHTML = `<div class="meta"><span class="tag">${r.src === 'AI' ? 'AI-generated' : 'From library' + (S.lt ? ': ' + esc(S.lt) : '')}</span><span class="q">${esc(S.obj)}</span></div><p class="key">“Quotation marks” = say this to the customer &nbsp;·&nbsp; <em>Italics</em> = something for you to do</p>` +
     ST.map(([L, n, k]) => `<div class="step"><div class="badge">${L}</div><div class="sb"><div class="sh"><b>${n}</b><button class="ghost" data-act="cp" data-k="${k}">Copy</button></div><div class="st">${disp(r, k)}</div></div></div>`).join('') +
-    `<div class="row"><button class="ghost" data-act="cp" data-k="all">Copy all</button>${r.src !== 'AI' ? '<button class="ghost" data-act="gen" data-force="1">Tailor with AI</button>' : ''}<button class="ghost" data-act="share">Share to team library</button><button class="ghost" data-act="practiseThis">Practise this</button></div>` +
+    intelHtml(r) + `<div class="row"><button class="ghost" data-act="cp" data-k="all">Copy all</button>${r.src !== 'AI' ? '<button class="ghost" data-act="gen" data-force="1">Tailor with AI</button>' : ''}<button class="ghost" data-act="share">Share to team library</button><button class="ghost" data-act="practiseThis">Practise this</button></div>` +
     `<div class="row" id="rate">${S.rated ? '<span class="note">Thanks for the feedback.</span>' : '<span class="note">Was this response useful?</span><button class="ghost" data-act="rate" data-v="1">Useful</button><button class="ghost" data-act="rate" data-v="0">Not really</button>'}</div>`;
   $('#out').scrollIntoView({ behavior: 'smooth' });
 }
 async function copy(t) { try { await navigator.clipboard.writeText(t); toast('Copied'); } catch (e) { const a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select(); try { document.execCommand('copy'); toast('Copied'); } catch (_) { toast('Copy not available'); } a.remove(); } }
-function cp(k) { const r = S.res; copy(k === 'all' ? ST.map(([L, n, x]) => n + ':\n' + stx(r, x)).join('\n\n') : stx(r, k)); }
+function cp(k) { const r = S.res; copy(k === 'intel' ? intelText(r) : k === 'all' ? ST.map(([L, n, x]) => n + ':\n' + stx(r, x)).join('\n\n') + (r.m ? '\n\n' + intelText(r) : '') : stx(r, k)); }
 function rate(v) { if (S.rated) return; S.rated = true; logUse({ type: 'rating', key: S.rk || S.obj.slice(0, 50).toLowerCase(), up: v, ind: C.k }); $('#rate').innerHTML = '<span class="note">Thanks for the feedback.</span>'; }
 const share = guard(async () => { await api('POST', '/api/library', { obj: S.obj, r: S.res, ind: C.k }); toast('Shared with your team'); await loadTeamLib(); });
 function logUse(o) { api('POST', '/api/usage', o).catch(() => {}); }

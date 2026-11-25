@@ -79,6 +79,9 @@
         <div><label for="tone">Tone</label><select id="tone"><option>Consultative</option><option>Direct</option><option>Warm</option><option>Challenger</option></select></div>
       </div>
       <label for="said">What’s been said so far (optional)</label><textarea id="said" maxlength="600"></textarea>
+      <label for="comp">Competitors the customer is looking at (optional)</label>
+      <input id="comp" maxlength="300" placeholder="e.g. Hyundai Tucson at Smith Hyundai, Mazda CX-5">
+      <label class="chk" id="resWrap"><input type="checkbox" id="research" checked><span>Research current competitor details and market offers online (uses AI, takes a little longer)</span></label>
       <label for="mode">Response source</label>
       <select id="mode"><option value="ai" selected>AI — tailored to this exact situation</option><option value="hybrid">Hybrid — library first, AI for anything else</option><option value="lib">Library — proven responses only</option></select>
       <button class="p" id="go" data-act="gen">Get ALERT response</button>

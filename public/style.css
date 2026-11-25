@@ -30,3 +30,4 @@ button.ghost{background:none;border:1px solid var(--line);color:var(--ink);borde
 .note{font-size:13px;color:var(--mut)}
 
 .foot{text-align:center;font-size:11px;color:var(--mut);margin:0;padding:18px 16px 28px;letter-spacing:.02em}
+.intel ul{margin:4px 0 10px;padding-left:20px}.intel a{color:var(--acc)}.ci{margin-bottom:6px}

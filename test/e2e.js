@@ -5,14 +5,21 @@ const http = require('node:http');
 const crypto = require('node:crypto');
 const assert = require('node:assert/strict');
 
-const mock = { prompts: [], stripe: [] };
+const mock = { prompts: [], bodies: [], stripe: [] };
 const fakeAI = http.createServer((req, res) => {
   let b = ''; req.on('data', c => b += c); req.on('end', () => {
-    const body = JSON.parse(b), prompt = body.messages[0].content; mock.prompts.push(prompt);
+    const body = JSON.parse(b), prompt = body.messages[0].content; mock.prompts.push(prompt); mock.bodies.push(body);
     let text = 'Client: Honestly I need to stay near $350 a month.';
     if (prompt.includes('Return ONLY JSON')) text = JSON.stringify({ acknowledge: '“I hear you.”', listen: 'Stay quiet and let them finish.', explore: ['What number works?', 'What is included?', 'What matters most?'], respond: 'Here is how we compare.', test: 'Does that help?' });
     if (prompt.startsWith('You are a sales coach')) text = 'ACKNOWLEDGE: 3/5. Fine.\nSCORES: A=3,L=4,E=2,R=3,T=1';
     res.setHeader('content-type', 'application/json');
+    if (body.tools && prompt.includes('FAILTOOL')) { res.statusCode = 400; return res.end('{"error":"web search not enabled"}'); }
+    if (body.tools) {
+      const j = { competitors: 0 };
+      const out = JSON.parse(text); out.market = { competitors: [{ name: 'Hyundai Tucson', points: ['Starts around $38,000 drive-away (2026)', 'Advertised 7-year warranty'] }], offers: ['Smith Hyundai: $2,000 trade-in bonus until 30 Nov'], caveat: 'Stock levels not confirmed.' };
+      return res.end(JSON.stringify({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Let me search.' }, { type: 'server_tool_use', id: 's1', name: 'web_search', input: { query: 'x' } }, { type: 'web_search_tool_result', tool_use_id: 's1', content: [{ type: 'web_search_result', title: 'Hyundai Tucson pricing', url: 'https://example.com/tucson' }, { type: 'web_search_result', title: 'Bad link', url: 'javascript:alert(1)' }] }, { type: 'text', text: JSON.stringify(out) }] }));
+    }
+    if (prompt.includes('Return ONLY JSON') && prompt.includes('Competitors the client')) { const out = JSON.parse(text); out.market = { competitors: [{ name: 'Rival', points: ['General fact'] }], offers: [], caveat: 'No live data.' }; text = JSON.stringify(out); }
     res.end(JSON.stringify({ content: [{ type: 'text', text }] }));
   });
 });
@@ -88,6 +95,28 @@ const listen = s => new Promise(r => s.listen(0, '127.0.0.1', () => r(s.address(
     assert.equal(r.s, 200); assert.equal(r.j.result.e.length, 3); assert.equal(r.j.result.src, 'AI');
     const p = mock.prompts.at(-1);
     assert.match(p, /a 5-year warranty/); assert.match(p, /Another dealer quoted me less/); assert.match(p, /sales consultant/);
+  });
+  await ok('market setting and competitor research', async () => {
+    assert.equal((await M('PUT', '/api/config', { dealer: 'Metro Auto Group', market: 'Australia', region: 'Sydney, NSW', warranty: 'a 5-year warranty' })).s, 200);
+    assert.equal((await M('GET', '/api/me')).j.config.market, 'Australia');
+    let r = await M('POST', '/api/ai', { task: 'coach', obj: 'Another dealer quoted me less', ind: 'auto', ctx: { comp: 'Hyundai Tucson at Smith Hyundai', research: true } });
+    assert.equal(r.s, 200);
+    let b = mock.bodies.at(-1);
+    assert.equal(b.tools[0].name, 'web_search'); assert.equal(b.tools[0].user_location.country, 'AU'); assert.ok(b.tools[0].max_uses <= 3);
+    assert.match(mock.prompts.at(-1), /Australia/); assert.match(mock.prompts.at(-1), /Sydney, NSW/); assert.match(mock.prompts.at(-1), /Hyundai Tucson at Smith Hyundai/);
+    const m = r.j.result.m;
+    assert.equal(m.researched, true); assert.equal(m.competitors[0].name, 'Hyundai Tucson'); assert.match(m.offers[0], /trade-in bonus/);
+    assert.deepEqual(m.sources, [{ title: 'Hyundai Tucson pricing', url: 'https://example.com/tucson' }]); // javascript: link dropped
+    assert.equal(r.j.result.e.length, 3);
+    // research switched off: no search tool, still returns competitor notes
+    r = await M('POST', '/api/ai', { task: 'coach', obj: 'Price is high', ind: 'auto', ctx: { comp: 'Mazda CX-5', research: false } });
+    assert.equal(mock.bodies.at(-1).tools, undefined); assert.equal(r.j.result.m.researched, false); assert.deepEqual(r.j.result.m.sources, []);
+    // search unavailable on the Anthropic account: falls back and says so
+    r = await M('POST', '/api/ai', { task: 'coach', obj: 'Price is high', ind: 'auto', ctx: { comp: 'FAILTOOL rival', research: true } });
+    assert.equal(r.s, 200); assert.equal(r.j.result.m.researched, false); assert.ok(!/Use web search/.test(mock.prompts.at(-1)));
+    // no competitors: no search, no market block
+    r = await M('POST', '/api/ai', { task: 'coach', obj: 'Price is high', ind: 'auto', ctx: {} });
+    assert.equal(mock.bodies.at(-1).tools, undefined); assert.equal(r.j.result.m, undefined);
   });
   await ok('practice and feedback', async () => {
     const chat = [{ w: 'c', t: 'Payment too high' }, { w: 'r', t: 'What number works?' }];
